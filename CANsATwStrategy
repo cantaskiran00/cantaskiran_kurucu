@@ -1,0 +1,69 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// author © KivancOzbilgic
+// developer © KivancOzbilgic
+//@version=5
+strategy('CANsATwStrategy', shorttitle='CANsATwStrategy', overlay=true, format=format.price, precision=2, default_qty_type = strategy.percent_of_equity, default_qty_value = 100, pyramiding = 0, commission_value = 0.1)
+coeff = input.float(1, 'Multiplier', step=0.1)
+AP = input(14, 'Common Period')
+ATR = ta.sma(ta.tr, AP)
+src = input(close)
+showsignalsk = input(title='Show Signals?', defval=true)
+novolumedata = input(title='Change calculation (no volume data)?', defval=false)
+upT = low - ATR * coeff
+downT = high + ATR * coeff
+AlphaTrend = 0.0
+AlphaTrend := (novolumedata ? ta.rsi(src, AP) >= 50 : ta.mfi(hlc3, AP) >= 50) ? upT < nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : upT : downT > nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : downT
+
+color1 = AlphaTrend > AlphaTrend[2] ? #00E60F : AlphaTrend < AlphaTrend[2] ? #80000B : AlphaTrend[1] > AlphaTrend[3] ? #00E60F : #80000B
+k1 = plot(AlphaTrend, color=color.new(#0022FC, 0), linewidth=3)
+k2 = plot(AlphaTrend[2], color=color.new(#FC0400, 0), linewidth=3)
+
+fill(k1, k2, color=color1)
+
+
+alertcondition(ta.cross(close, AlphaTrend), title='Cross Alert', message='Price - AlphaTrend Crossing!')
+alertcondition(ta.crossover(low, AlphaTrend), title='CrossOver Alarm', message='BUY SIGNAL!')
+alertcondition(ta.crossunder(high, AlphaTrend), title='CrossUnder Alarm', message='SELL SIGNAL!')
+
+alertcondition(ta.cross(close[1], AlphaTrend[1]), title='Cross Alert After Bar Close', message='Price - AlphaTrend Crossing!')
+alertcondition(ta.crossover(low[1], AlphaTrend[1]), title='CrossOver Alarm After Bar Close', message='BUY SIGNAL!')
+alertcondition(ta.crossunder(high[1], AlphaTrend[1]), title='CrossUnder Alarm After Bar Close', message='SELL SIGNAL!')
+
+
+needlong = input(true, defval = true, title = "Long")
+needshort = input(true, defval = true, title = "Short")
+fromyear = input.int(1900, defval = 1900, minval = 1900, maxval = 2100, title = "From Year")
+toyear = input.int(2100, defval = 2100, minval = 1900, maxval = 2100, title = "To Year")
+frommonth = input.int(01, defval = 01, minval = 01, maxval = 12, title = "From Month")
+tomonth = input.int(12, defval = 12, minval = 01, maxval = 12, title = "To Month")
+fromday = input.int(01, defval = 01, minval = 01, maxval = 31, title = "From day")
+today = input.int(31, defval = 31, minval = 01, maxval = 31, title = "To day")
+
+buySignalk = ta.crossover(AlphaTrend, AlphaTrend[2])
+sellSignalk = ta.crossunder(AlphaTrend, AlphaTrend[2])
+
+
+K1 = ta.barssince(buySignalk)
+K2 = ta.barssince(sellSignalk)
+O1 = ta.barssince(buySignalk[1])
+O2 = ta.barssince(sellSignalk[1])
+
+plotshape(buySignalk and showsignalsk and O1 > K2 ? AlphaTrend[2] * 0.9999 : na, title='BUY', text='BUY', location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(#0022FC, 0), textcolor=color.new(color.white, 0))
+
+plotshape(sellSignalk and showsignalsk and O2 > K1 ? AlphaTrend[2] * 1.0001 : na, title='SELL', text='SELL', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.maroon, 0), textcolor=color.new(color.white, 0))
+// after alarm module there was a bug. fixed and updated again
+alertcondition(buySignalk and showsignalsk and O1 > K2 ? AlphaTrend[2] * 0.9999 : na, title="AlphaTrend Buy", message="AlphaTrend Buy!")
+alertcondition(sellSignalk and showsignalsk and O2 > K1 ? AlphaTrend[2] * 1.0001:na, title="AlphaTrend Sell", message="AlphaTrend Sell!")
+
+
+truetime = time > timestamp(fromyear, frommonth, fromday, 00, 00) and time < timestamp(toyear, tomonth, today, 23, 59)
+if buySignalk and showsignalsk and O1 > K2 ? AlphaTrend[2] * 0.9999 : na
+    strategy.entry("Long", strategy.long, when = truetime)
+if sellSignalk and showsignalsk and O2 > K1 ? AlphaTrend[2] * 1.0001:na
+    strategy.entry("Short", strategy.short, when = truetime)
+if buySignalk and showsignalsk and O1 > K2 ? AlphaTrend[2] * 0.9999 : na
+    strategy.close_all()
+if sellSignalk and showsignalsk and O2 > K1 ? AlphaTrend[2] * 1.0001:na
+    strategy.close_all()
+if time > timestamp(toyear, tomonth, today, 23, 59)
+    strategy.close_all()
