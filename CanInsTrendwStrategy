@@ -1,0 +1,94 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © cantaskiran00
+
+//@version=4
+strategy(title = "CanInsTrendwStrategy", shorttitle = "CanInsTrendwStrategy", overlay = true, default_qty_type = strategy.percent_of_equity, default_qty_value = 100, pyramiding = 0, commission_value = 0.1)
+
+needlong = input(true, defval = true, title = "Long")
+needshort = input(true, defval = true, title = "Short")
+
+showrib = input(false, title = "Show ribbon")
+showbg = input(false, title = "Show color")
+fromyear = input(1900, defval = 1900, minval = 1900, maxval = 2100, title = "From Year")
+toyear = input(2100, defval = 2100, minval = 1900, maxval = 2100, title = "To Year")
+frommonth = input(01, defval = 01, minval = 01, maxval = 12, title = "From Month")
+tomonth = input(12, defval = 12, minval = 01, maxval = 12, title = "To Month")
+fromday = input(01, defval = 01, minval = 01, maxval = 31, title = "From day")
+today = input(31, defval = 31, minval = 01, maxval = 31, title = "To day")
+
+
+
+//input
+src=input(close,title="source")
+modeSwitch = input("Hma",title="Hull Variation", options=["Hma","Thma","Ehma"])
+lenght=input(55,title="Lenght(180-200 fır floating S/R, 55 for swing entry)")
+lenghtMult=input(3.0,title="uzunluk çarpanı (düz bantlı daha yüksek zaman dilimlerini görüntülemk için kullanılır)")
+
+useHtf=input(false,title="X zaman diliminden Gövde HMA'yı göster? (Good for scaliping)")
+htf=input("240",title="higher timeframe",type=input.resolution)
+
+switchColor=input(true,"trende göre gövde rengi?")
+candleCol=input(false,"Hull's trend'e göre renkli mumlar")
+visualSwitch=input(true,title="grup olrak gösterilsin mi")
+thicknesSwitch=input(15,title="hat kalınlığı")
+transpSwitch=input(40,title="Bant şeffaflığı",step=5)
+
+//functions
+//hma
+HMA(_src,_lenght) =>     wma(2*wma(_src,_lenght/2)-wma(_src,_lenght),round(sqrt(_lenght)))
+//EHMA
+EHMA(_src,_lenght) =>    ema(2*ema(_src,_lenght/2)-ema(_src,_lenght),round(sqrt(_lenght)))
+//THMA
+THMA(_src, _lenght) =>  wma(wma(_src,_lenght / 3) * 3 - wma(_src, _lenght / 2) - wma(_src, _lenght), _lenght)
+
+//switch
+
+Mode(modeSwitch,src,len) =>
+      modeSwitch == "Hma" ? HMA (src, len) : 
+      modeSwitch == "Ehma"? EHMA(src, len) : 
+      modeSwitch == "Thma"? THMA(src, len/2) :  na
+        
+//OUT
+_hull=Mode(modeSwitch,src,int(lenght*lenghtMult))
+HULL= useHtf? security(syminfo.ticker,htf,_hull):_hull
+MHULL=HULL[0]
+SHULL=HULL[2]
+
+//color
+hullColor=switchColor?(HULL>HULL[2]? #00ff00:#ff0000):#ff9800
+
+//plot
+
+Fi1=plot(MHULL,title="MHULL",color=hullColor,linewidth=thicknesSwitch,transp=50)
+Fi2=plot(visualSwitch?SHULL:na,title="SHULL",color=hullColor,linewidth=thicknesSwitch,transp=50)
+///< Engind Filler
+fill(Fi1,Fi2,title="bandfiller",color=hullColor,transp=transpSwitch)
+//barcolor
+
+barcolor(color=candleCol? (switchColor? hullColor:na):na)
+
+alimkosulu=crossover(MHULL,SHULL)
+satimkosulu=crossunder(MHULL,SHULL)
+
+b1= barssince(alimkosulu)
+s1=barssince(satimkosulu)
+
+plotshape(alimkosulu and b1[1]>s1[1],size=size.small,style=shape.labelup,location=location.belowbar,color=color.green,text="AL",textcolor=color.black)
+plotshape(satimkosulu and s1[1]>b1[1],size=size.small,style=shape.labeldown,location=location.abovebar,color=color.red,text="SAT",textcolor=color.black)
+//alertcondition(alimkosulu,title="AL",message="al")
+//alertcondition(satimkosulu,title="SAt",message="SAt")
+
+
+//Trading
+truetime = time > timestamp(fromyear, frommonth, fromday, 00, 00) and time < timestamp(toyear, tomonth, today, 23, 59)
+if alimkosulu and needlong
+    strategy.entry("Long", strategy.long, when = truetime)
+if satimkosulu and needshort
+    strategy.entry("Short", strategy.short, when = truetime)
+if alimkosulu and needlong == false
+    strategy.close_all()
+if satimkosulu and needshort == false
+    strategy.close_all()
+if time > timestamp(toyear, tomonth, today, 23, 59)
+    strategy.close_all()
+
